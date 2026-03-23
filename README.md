@@ -34,7 +34,7 @@ java -cp src minijava.compiler.Main .\Factorial.java
 Para testar um arquivo com erro proposital:
 
 ```powershell
-java -cp src minijava.compiler.Main .\factorialWithError.java
+java -cp src minijava.compiler.Main .\FactorialWithError.java
 ```
 
 ## O que significa `-cp src`
