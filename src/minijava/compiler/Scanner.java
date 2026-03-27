@@ -12,6 +12,7 @@ public class Scanner {
     private int start = 0;
     private int current = 0;
     private int line = 1;
+    private int lineStart = 0; 
 
     private static final Map<String, TokenType> keywords;
 
@@ -46,7 +47,9 @@ public class Scanner {
             start = current;
             scanToken();
         }
-        tokens.add(new Token(TokenType.EOF, "", line, current));
+        
+        int eofColumn = current - lineStart + 1;
+        tokens.add(new Token(TokenType.EOF, "", line, eofColumn));
         return tokens;
     }
 
@@ -74,7 +77,8 @@ public class Scanner {
                     addToken(TokenType.AND);
                 } else {
                     hadError = true;
-                    System.err.println("Unexpected character '&' at line " + line);
+                    int errorCol = current - lineStart;
+                    System.err.println("[Line " + line + ", Col " + errorCol + "] Unexpected character '&'");
                 }
                 break;
             case '/':
@@ -82,18 +86,19 @@ public class Scanner {
                     while (peek() != '\n' && !isAtEnd()) advance();
                 } else {
                     hadError = true;
-                    System.err.println("Unexpected character '/' at line " + line);
+                    int errorCol = current - lineStart;
+                    System.err.println("[Line " + line + ", Col " + errorCol + "] Unexpected character '/'");
                 }
                 break;
 
             case ' ':
             case '\r':
             case '\t':
-                // Ignore whitespace
                 break;
 
             case '\n':
                 line++;
+                lineStart = current;
                 break;
 
             default:
@@ -103,7 +108,8 @@ public class Scanner {
                     identifier();
                 } else {
                     hadError = true;
-                    System.err.println("Unexpected character at line " + line + ": " + c);
+                    int errorCol = current - lineStart;
+                    System.err.println("[Line " + line + ", Col " + errorCol + "] Unexpected character: " + c);
                 }
                 break;
         }
@@ -137,7 +143,8 @@ public class Scanner {
 
     private void addToken(TokenType type) {
         String text = source.substring(start, current);
-        tokens.add(new Token(type, text, line, start));
+        int column = start - lineStart + 1;
+        tokens.add(new Token(type, text, line, column));
     }
 
     private boolean match(char expected) {
@@ -166,4 +173,3 @@ public class Scanner {
         return isAlpha(c) || isDigit(c);
     }
 }
-

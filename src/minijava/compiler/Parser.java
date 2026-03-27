@@ -18,7 +18,6 @@ public class Parser {
             program();
         } catch (ParseError error) {
             hadError = true;
-            // Top level error
             synchronize();
         }
     }
@@ -65,23 +64,9 @@ public class Parser {
         consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");
 
         while (check(TokenType.PUBLIC) || check(TokenType.INT) || check(TokenType.BOOLEAN) || check(TokenType.IDENTIFIER)) {
-            // VarDecl or MethodDecl?
-            // VarDecl: Type ID ; 
-            // MethodDecl: Type ID ( ... ) ...
-            // We need lookahead. 
-            // Actually MiniJava grammar often puts VarDecls before MethodDecls strictly. 
-            // Let's assume strict order or use lookahead 2.
-            
-            // For simplicity in this LL parser, we'll implement a loose check or just assume MethodDecl starts with 'public' in some grammars, 
-            // but in MiniJava methods are often 'public Type name'. 
-            // Vars are 'Type name;'.
-            
             if (match(TokenType.PUBLIC)) {
-                // Definitely a method
                 methodDeclaration();
             } else {
-                // Variable declaration
-                // Need to handle type.
                 type();
                 consume(TokenType.IDENTIFIER, "Expect variable name.");
                 consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
@@ -92,10 +77,6 @@ public class Parser {
     }
     
     private void methodDeclaration() {
-        // 'public' already consumed if we came from classDeclaration logic above
-        // But strict MiniJava says: MethodDecl -> public Type ID ( FormalList ) { VarDecl* Statement* return Exp ; }
-        // My logic above consumed 'public'.
-        
         type();
         consume(TokenType.IDENTIFIER, "Expect method name.");
         consume(TokenType.LEFT_PAREN, "Expect '('.");
@@ -105,35 +86,11 @@ public class Parser {
         consume(TokenType.RIGHT_PAREN, "Expect ')'.");
         consume(TokenType.LEFT_BRACE, "Expect '{'.");
 
-        // VarDecls
-        // In full MiniJava, VarDecls come before Statements.
-        while (isTypeStart()) {
-            // Needs lookahead to distinguish local var from statement (e.g. Identifier usually starts statement or assignment)
-            // Type ID;  vs ID = Exp;
-            // 'int' 'boolean' are clear. 'ID' is ambiguous (could be Type or Variable assignment).
-            // We need LL(2) or semantic info.
-            // For now, let's assume if it starts with int/boolean it is var. 
-            // If it starts with ID, check valid types.
-            if (check(TokenType.INT) || check(TokenType.BOOLEAN)) {
-               varDeclaration();
-            } else {
-               // Complex case: User defined type vs Assignment.
-               // MiniJava usually doesn't allow 'MyType x;' inside methods in some definitions, 
-               // but typically it does.
-               // We will parse as statement if ambiguous for now to keep simple, or peek next token.
-                if (check(TokenType.IDENTIFIER)) { // Potential type
-                     if (peekNext() == TokenType.IDENTIFIER) {
-                         varDeclaration();
-                     } else {
-                         break; // Statement
-                     }
-                } else {
-                    break;
-                }
-            }
+        while (isVarDeclaration()) {
+            varDeclaration();
         }
 
-        while (!check(TokenType.RETURN) && !check(TokenType.RIGHT_BRACE)) {
+        while (!check(TokenType.RETURN) && !check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
             statement();
         }
 
@@ -172,81 +129,70 @@ public class Parser {
         }
     }
     
-    private boolean isTypeStart() {
-        return check(TokenType.INT) || check(TokenType.BOOLEAN) || check(TokenType.IDENTIFIER);
-    }
-    
     private TokenType peekNext() {
         if (current + 1 >= tokens.size()) return TokenType.EOF;
         return tokens.get(current + 1).type;
     }
 
     private void statement() {
-        if (match(TokenType.LEFT_BRACE)) {
-            while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+        try {
+            if (match(TokenType.LEFT_BRACE)) {
+                while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+                    statement();
+                }
+                consume(TokenType.RIGHT_BRACE, "Expect '}'.");
+            } else if (match(TokenType.IF)) {
+                consume(TokenType.LEFT_PAREN, "Expect '('.");
+                expression();
+                consume(TokenType.RIGHT_PAREN, "Expect ')'.");
                 statement();
-            }
-            consume(TokenType.RIGHT_BRACE, "Expect '}'.");
-        } else if (match(TokenType.IF)) {
-            consume(TokenType.LEFT_PAREN, "Expect '('.");
-            expression();
-            consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-            statement();
-            if (match(TokenType.ELSE)) {
+                if (match(TokenType.ELSE)) {
+                    statement();
+                }
+            } else if (match(TokenType.WHILE)) {
+                consume(TokenType.LEFT_PAREN, "Expect '('.");
+                expression();
+                consume(TokenType.RIGHT_PAREN, "Expect ')'.");
                 statement();
-            }
-        } else if (match(TokenType.WHILE)) {
-            consume(TokenType.LEFT_PAREN, "Expect '('.");
-            expression();
-            consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-            statement();
-        } else if (match(TokenType.IDENTIFIER)) {
-            String lexeme = previous().lexeme;
-             if (lexeme.equals("System")) {
-                 if (match(TokenType.DOT)) {
-                     if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("out")) {
-                         if (match(TokenType.DOT)) {
-                             if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("println")) {
-                                 consume(TokenType.LEFT_PAREN, "Expect '('.");
-                                 expression();
-                                 consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-                                 consume(TokenType.SEMICOLON, "Expect ';'.");
-                                 return;
+            } else if (match(TokenType.IDENTIFIER)) {
+                String lexeme = previous().lexeme;
+                 if (lexeme.equals("System")) {
+                     if (match(TokenType.DOT)) {
+                         if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("out")) {
+                             if (match(TokenType.DOT)) {
+                                 if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("println")) {
+                                     consume(TokenType.LEFT_PAREN, "Expect '('.");
+                                     expression();
+                                     consume(TokenType.RIGHT_PAREN, "Expect ')'.");
+                                     consume(TokenType.SEMICOLON, "Expect ';'.");
+                                     return;
+                                 }
                              }
                          }
+                         throw error(previous(), "Expect 'System.out.println'.");
                      }
-                     // If we got here, it matched System.IDENTIFIER but not out.println or something.
-                     // It is likely an error or weird assignment System.x = ...
-                     // Usually MiniJava doesn't have field access on LHS except via this or new.
-                     // But let's assume if it fails the println check, it falls through to assignment check?
-                     // No, "match" consumes tokens. We can't backtrack easily in this simple parser.
-                     // For this simple project, strict System.out.println check is fine.
-                     // If we consumed DOT, we can't fall back to assignment easily.
-                     // Let's assume valid MiniJava code is correct or error out.
-                     throw error(previous(), "Expect 'System.out.println'.");
                  }
-             }
 
-            // Assignment or Array Assignment
-            // ID = Exp; or ID [ Exp ] = Exp;
-            if (match(TokenType.ASSIGN)) {
-                expression();
-                consume(TokenType.SEMICOLON, "Expect ';'.");
-            } else if (match(TokenType.LEFT_BRACKET)) {
-                expression();
-                consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
-                consume(TokenType.ASSIGN, "Expect '='.");
-                expression();
-                consume(TokenType.SEMICOLON, "Expect ';'.");
+                if (match(TokenType.ASSIGN)) {
+                    expression();
+                    consume(TokenType.SEMICOLON, "Expect ';'.");
+                } else if (match(TokenType.LEFT_BRACKET)) {
+                    expression();
+                    consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
+                    consume(TokenType.ASSIGN, "Expect '='.");
+                    expression();
+                    consume(TokenType.SEMICOLON, "Expect ';'.");
+                } else {
+                     throw error(previous(), "Expect assignment.");
+                }
             } else {
-                 throw error(previous(), "Expect assignment.");
+                 throw error(peek(), "Expect statement.");
             }
-        } else {
-             error(peek(), "Expect statement.");
+        } catch (ParseError error) {
+            synchronize();
         }
     }
 
-    // Precedence handling via layering
     private void expression() {
         andExpression();
     }
@@ -275,7 +221,7 @@ public class Parser {
     private void multiplicativeExpression() {
         notExpression();
         while (match(TokenType.TIMES)) {
-            notExpression(); // NotExpr is unary high precedence
+            notExpression(); 
         }
     }
 
@@ -289,13 +235,9 @@ public class Parser {
     
     private void term() {
         if (match(TokenType.INTEGER_LITERAL)) {
-            // Literal
         } else if (match(TokenType.TRUE)) {
-            // Literal
         } else if (match(TokenType.FALSE)) {
-            // Literal
         } else if (match(TokenType.THIS)) {
-            // this
         } else if (match(TokenType.NEW)) {
             if (match(TokenType.INT)) {
                 consume(TokenType.LEFT_BRACKET, "Expect '['.");
@@ -310,19 +252,16 @@ public class Parser {
             expression();
             consume(TokenType.RIGHT_PAREN, "Expect ')'.");
         } else if (match(TokenType.IDENTIFIER)) {
-            // ID
         } else {
             throw error(peek(), "Expect expression.");
         }
 
-        // Handle suffixes: .length, .method(), [index]
         while (true) {
             if (match(TokenType.LEFT_BRACKET)) {
                 expression();
                 consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
             } else if (match(TokenType.DOT)) {
                 if (match(TokenType.LENGTH)) {
-                    // .length
                 } else {
                      consume(TokenType.IDENTIFIER, "Expect method name.");
                      consume(TokenType.LEFT_PAREN, "Expect '('.");
@@ -402,5 +341,17 @@ public class Parser {
 
     private Token previous() {
         return tokens.get(current - 1);
+    }
+
+    private boolean isVarDeclaration() {
+        if (check(TokenType.INT) || check(TokenType.BOOLEAN)) {
+            return true;
+        }
+        if (check(TokenType.IDENTIFIER)) {
+            if (peekNext() == TokenType.IDENTIFIER) {
+                return true;
+            }
+        }
+        return false;
     }
 }
