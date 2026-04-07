@@ -1,6 +1,8 @@
 package minijava.compiler;
 
+import minijava.compiler.ast.*;
 import java.util.List;
+import java.util.ArrayList;
 
 public class Parser {
     private final List<Token> tokens;
@@ -13,12 +15,16 @@ public class Parser {
 
     private static class ParseError extends RuntimeException {}
 
-    public void parse() {
+    /**
+     * Faz o parsing e retorna a AST (raiz do programa)
+     */
+    public Program parseProgram() {
         try {
-            program();
+            return program();
         } catch (ParseError error) {
             hadError = true;
             synchronize();
+            return null;
         }
     }
 
@@ -26,16 +32,20 @@ public class Parser {
         return hadError;
     }
 
-    private void program() {
-        mainClass();
+    private Program program() {
+        MainClass mainClass = mainClass();
+        List<ClassDecl> classes = new ArrayList<>();
+        
         while (!isAtEnd()) {
-            classDeclaration();
+            classes.add(classDeclaration());
         }
+        
+        return new Program(mainClass, classes);
     }
 
-    private void mainClass() {
+    private MainClass mainClass() {
         consume(TokenType.CLASS, "Expect 'class' keyword.");
-        consume(TokenType.IDENTIFIER, "Expect class name.");
+        Token className = consume(TokenType.IDENTIFIER, "Expect class name.");
         consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");
         consume(TokenType.PUBLIC, "Expect 'public' keyword.");
         consume(TokenType.STATIC, "Expect 'static' keyword.");
@@ -45,87 +55,116 @@ public class Parser {
         consume(TokenType.STRING, "Expect 'String' keyword.");
         consume(TokenType.LEFT_BRACKET, "Expect '['.");
         consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
-        consume(TokenType.IDENTIFIER, "Expect argument name.");
+        Token argName = consume(TokenType.IDENTIFIER, "Expect argument name.");
         consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
         consume(TokenType.LEFT_BRACE, "Expect '{' in main method.");
 
-        statement();
+        Statement mainStatement = statement();
 
         consume(TokenType.RIGHT_BRACE, "Expect '}' after main method.");
         consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
+        
+        return new MainClass(className, argName, mainStatement);
     }
 
-    private void classDeclaration() {
+    private ClassDecl classDeclaration() {
         consume(TokenType.CLASS, "Expect 'class' keyword.");
-        consume(TokenType.IDENTIFIER, "Expect class name.");
+        Token className = consume(TokenType.IDENTIFIER, "Expect class name.");
+        
+        Token superClassName = null;
         if (match(TokenType.EXTENDS)) {
-            consume(TokenType.IDENTIFIER, "Expect superclass name.");
+            superClassName = consume(TokenType.IDENTIFIER, "Expect superclass name.");
         }
+        
         consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");
+
+        List<VarDecl> fields = new ArrayList<>();
+        List<MethodDecl> methods = new ArrayList<>();
 
         while (check(TokenType.PUBLIC) || check(TokenType.INT) || check(TokenType.BOOLEAN) || check(TokenType.IDENTIFIER)) {
             if (match(TokenType.PUBLIC)) {
-                methodDeclaration();
+                methods.add(methodDeclaration());
             } else {
-                type();
-                consume(TokenType.IDENTIFIER, "Expect variable name.");
+                Type fieldType = type();
+                Token fieldName = consume(TokenType.IDENTIFIER, "Expect variable name.");
                 consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
+                fields.add(new VarDecl(fieldType, fieldName));
             }
         }
         
         consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
+        
+        return new ClassDecl(className, superClassName, fields, methods);
     }
     
-    private void methodDeclaration() {
-        type();
-        consume(TokenType.IDENTIFIER, "Expect method name.");
+    private MethodDecl methodDeclaration() {
+        Type returnType = type();
+        Token methodName = consume(TokenType.IDENTIFIER, "Expect method name.");
         consume(TokenType.LEFT_PAREN, "Expect '('.");
+        
+        List<VarDecl> parameters = new ArrayList<>();
         if (!check(TokenType.RIGHT_PAREN)) {
-            formalList();
+            parameters = formalList();
         }
         consume(TokenType.RIGHT_PAREN, "Expect ')'.");
         consume(TokenType.LEFT_BRACE, "Expect '{'.");
 
+        List<VarDecl> locals = new ArrayList<>();
         while (isVarDeclaration()) {
-            varDeclaration();
+            locals.add(varDeclaration());
         }
 
+        List<Statement> statements = new ArrayList<>();
         while (!check(TokenType.RETURN) && !check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
-            statement();
+            statements.add(statement());
         }
 
         consume(TokenType.RETURN, "Expect 'return'.");
-        expression();
+        Expression returnExpression = expression();
         consume(TokenType.SEMICOLON, "Expect ';'.");
         consume(TokenType.RIGHT_BRACE, "Expect '}'.");
+        
+        return new MethodDecl(returnType, methodName, parameters, locals, statements, returnExpression);
     }
 
-    private void varDeclaration() {
-        type();
-        consume(TokenType.IDENTIFIER, "Expect variable name.");
+    private VarDecl varDeclaration() {
+        Type varType = type();
+        Token varName = consume(TokenType.IDENTIFIER, "Expect variable name.");
         consume(TokenType.SEMICOLON, "Expect ';'.");
+        return new VarDecl(varType, varName);
     }
 
-    private void formalList() {
-        type();
-        consume(TokenType.IDENTIFIER, "Expect parameter name.");
+    private List<VarDecl> formalList() {
+        List<VarDecl> parameters = new ArrayList<>();
+        
+        Type paramType = type();
+        Token paramName = consume(TokenType.IDENTIFIER, "Expect parameter name.");
+        parameters.add(new VarDecl(paramType, paramName));
+        
         while (match(TokenType.COMMA)) {
-            type();
-            consume(TokenType.IDENTIFIER, "Expect parameter name.");
+            paramType = type();
+            paramName = consume(TokenType.IDENTIFIER, "Expect parameter name.");
+            parameters.add(new VarDecl(paramType, paramName));
         }
+        
+        return parameters;
     }
 
-    private void type() {
+    private Type type() {
         if (match(TokenType.INT)) {
             if (match(TokenType.LEFT_BRACKET)) {
                 consume(TokenType.RIGHT_BRACKET, "Expect ']' for int array.");
+                return new Type(Type.BaseType.INT, true);
             }
+            return new Type(Type.BaseType.INT);
         } else if (match(TokenType.BOOLEAN)) {
-            // ok
+            return new Type(Type.BaseType.BOOLEAN);
         } else if (match(TokenType.IDENTIFIER)) {
-            // ok
+            String className = previous().lexeme;
+            return new Type(className);
         } else {
             error(peek(), "Expect validation type.");
+            return new Type(Type.BaseType.INT);  // Tipo padrão
         }
     }
     
@@ -134,153 +173,208 @@ public class Parser {
         return tokens.get(current + 1).type;
     }
 
-    private void statement() {
+    private Statement statement() {
         try {
             if (match(TokenType.LEFT_BRACE)) {
+                List<Statement> statements = new ArrayList<>();
                 while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
-                    statement();
+                    statements.add(statement());
                 }
                 consume(TokenType.RIGHT_BRACE, "Expect '}'.");
+                return new BlockStatement(statements);
             } else if (match(TokenType.IF)) {
                 consume(TokenType.LEFT_PAREN, "Expect '('.");
-                expression();
+                Expression condition = expression();
                 consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-                statement();
+                Statement thenStatement = statement();
+                Statement elseStatement = null;
                 if (match(TokenType.ELSE)) {
-                    statement();
+                    elseStatement = statement();
                 }
+                return new IfStatement(condition, thenStatement, elseStatement);
             } else if (match(TokenType.WHILE)) {
                 consume(TokenType.LEFT_PAREN, "Expect '('.");
-                expression();
+                Expression condition = expression();
                 consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-                statement();
+                Statement body = statement();
+                return new WhileStatement(condition, body);
             } else if (match(TokenType.IDENTIFIER)) {
                 String lexeme = previous().lexeme;
-                 if (lexeme.equals("System")) {
-                     if (match(TokenType.DOT)) {
-                         if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("out")) {
-                             if (match(TokenType.DOT)) {
-                                 if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("println")) {
-                                     consume(TokenType.LEFT_PAREN, "Expect '('.");
-                                     expression();
-                                     consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-                                     consume(TokenType.SEMICOLON, "Expect ';'.");
-                                     return;
-                                 }
-                             }
-                         }
-                         throw error(previous(), "Expect 'System.out.println'.");
-                     }
-                 }
+                
+                // Trata System.out.println(expr)
+                if (lexeme.equals("System")) {
+                    if (match(TokenType.DOT)) {
+                        if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("out")) {
+                            if (match(TokenType.DOT)) {
+                                if (match(TokenType.IDENTIFIER) && previous().lexeme.equals("println")) {
+                                    consume(TokenType.LEFT_PAREN, "Expect '('.");
+                                    Expression expr = expression();
+                                    consume(TokenType.RIGHT_PAREN, "Expect ')'.");
+                                    consume(TokenType.SEMICOLON, "Expect ';'.");
+                                    return new PrintStatement(expr);
+                                }
+                            }
+                        }
+                    }
+                    throw error(previous(), "Expect 'System.out.println'.");
+                }
 
+                Token varName = previous();
+                
+                // Trata atribuição simples ou atribuição em array
                 if (match(TokenType.ASSIGN)) {
-                    expression();
+                    Expression value = expression();
                     consume(TokenType.SEMICOLON, "Expect ';'.");
+                    return new AssignmentStatement(varName, value);
                 } else if (match(TokenType.LEFT_BRACKET)) {
-                    expression();
+                    Expression index = expression();
                     consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
                     consume(TokenType.ASSIGN, "Expect '='.");
-                    expression();
+                    Expression value = expression();
                     consume(TokenType.SEMICOLON, "Expect ';'.");
+                    return new ArrayAssignmentStatement(varName, index, value);
                 } else {
-                     throw error(previous(), "Expect assignment.");
+                    throw error(previous(), "Expect assignment.");
                 }
             } else {
-                 throw error(peek(), "Expect statement.");
+                throw error(peek(), "Expect statement.");
             }
         } catch (ParseError error) {
             synchronize();
+            return null;
         }
     }
 
-    private void expression() {
-        andExpression();
+    private Expression expression() {
+        return andExpression();
     }
     
-    private void andExpression() {
-        relationalExpression();
+    private Expression andExpression() {
+        Expression expr = relationalExpression();
+        
         while (match(TokenType.AND)) {
-            relationalExpression();
+            BinaryOp.Operator op = BinaryOp.Operator.AND;
+            Expression right = relationalExpression();
+            expr = new BinaryOp(expr, op, right);
         }
+        
+        return expr;
     }
     
-    private void relationalExpression() {
-        additiveExpression();
+    private Expression relationalExpression() {
+        Expression expr = additiveExpression();
+        
         while (match(TokenType.LESS_THAN)) {
-            additiveExpression();
+            BinaryOp.Operator op = BinaryOp.Operator.LESS_THAN;
+            Expression right = additiveExpression();
+            expr = new BinaryOp(expr, op, right);
         }
+        
+        return expr;
     }
     
-    private void additiveExpression() {
-        multiplicativeExpression();
+    private Expression additiveExpression() {
+        Expression expr = multiplicativeExpression();
+        
         while (match(TokenType.PLUS) || match(TokenType.MINUS)) {
-            multiplicativeExpression();
+            TokenType opType = previous().type;
+            BinaryOp.Operator op = opType == TokenType.PLUS ? BinaryOp.Operator.PLUS : BinaryOp.Operator.MINUS;
+            Expression right = multiplicativeExpression();
+            expr = new BinaryOp(expr, op, right);
         }
+        
+        return expr;
     }
      
-    private void multiplicativeExpression() {
-        notExpression();
+    private Expression multiplicativeExpression() {
+        Expression expr = notExpression();
+        
         while (match(TokenType.TIMES)) {
-            notExpression(); 
+            BinaryOp.Operator op = BinaryOp.Operator.TIMES;
+            Expression right = notExpression();
+            expr = new BinaryOp(expr, op, right);
         }
+        
+        return expr;
     }
 
-    private void notExpression() {
+    private Expression notExpression() {
         if (match(TokenType.NOT)) {
-            notExpression();
+            Expression operand = notExpression();
+            return new UnaryOp(UnaryOp.Operator.NOT, operand);
         } else {
-            term();
+            return term();
         }
     }
     
-    private void term() {
-        if (match(TokenType.INTEGER_LITERAL)) {
-        } else if (match(TokenType.TRUE)) {
-        } else if (match(TokenType.FALSE)) {
-        } else if (match(TokenType.THIS)) {
-        } else if (match(TokenType.NEW)) {
-            if (match(TokenType.INT)) {
-                consume(TokenType.LEFT_BRACKET, "Expect '['.");
-                expression();
-                consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
-            } else {
-                consume(TokenType.IDENTIFIER, "Expect class name.");
-                consume(TokenType.LEFT_PAREN, "Expect '('.");
-                consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-            }
-        } else if (match(TokenType.LEFT_PAREN)) {
-            expression();
-            consume(TokenType.RIGHT_PAREN, "Expect ')'.");
-        } else if (match(TokenType.IDENTIFIER)) {
-        } else {
-            throw error(peek(), "Expect expression.");
-        }
-
+    private Expression term() {
+        Expression expr = primary();
+        
         while (true) {
             if (match(TokenType.LEFT_BRACKET)) {
-                expression();
+                Expression index = expression();
                 consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
+                expr = new ArrayAccess(expr, index);
             } else if (match(TokenType.DOT)) {
                 if (match(TokenType.LENGTH)) {
+                    expr = new ArrayLength(expr);
                 } else {
-                     consume(TokenType.IDENTIFIER, "Expect method name.");
-                     consume(TokenType.LEFT_PAREN, "Expect '('.");
-                     if (!check(TokenType.RIGHT_PAREN)) {
-                        expression();
-                        while (match(TokenType.COMMA)) expression();
-                     }
-                     consume(TokenType.RIGHT_PAREN, "Expect ')'.");
+                    Token methodName = consume(TokenType.IDENTIFIER, "Expect method name.");
+                    consume(TokenType.LEFT_PAREN, "Expect '('.");
+                    List<Expression> args = new ArrayList<>();
+                    if (!check(TokenType.RIGHT_PAREN)) {
+                        args.add(expression());
+                        while (match(TokenType.COMMA)) {
+                            args.add(expression());
+                        }
+                    }
+                    consume(TokenType.RIGHT_PAREN, "Expect ')'.");
+                    expr = new MethodCall(expr, methodName, args);
                 }
             } else {
                 break;
             }
         }
+        
+        return expr;
     }
 
-    private void consume(TokenType type, String message) {
+    private Expression primary() {
+        if (match(TokenType.INTEGER_LITERAL)) {
+            int value = Integer.parseInt(previous().lexeme);
+            return new IntegerLiteral(value);
+        } else if (match(TokenType.TRUE)) {
+            return new BooleanLiteral(true);
+        } else if (match(TokenType.FALSE)) {
+            return new BooleanLiteral(false);
+        } else if (match(TokenType.THIS)) {
+            return new This(previous());
+        } else if (match(TokenType.NEW)) {
+            if (match(TokenType.INT)) {
+                consume(TokenType.LEFT_BRACKET, "Expect '['.");
+                Expression sizeExpr = expression();
+                consume(TokenType.RIGHT_BRACKET, "Expect ']'.");
+                return new NewArray(sizeExpr);
+            } else {
+                Token className = consume(TokenType.IDENTIFIER, "Expect class name.");
+                consume(TokenType.LEFT_PAREN, "Expect '('.");
+                consume(TokenType.RIGHT_PAREN, "Expect ')'.");
+                return new NewObject(className);
+            }
+        } else if (match(TokenType.LEFT_PAREN)) {
+            Expression expr = expression();
+            consume(TokenType.RIGHT_PAREN, "Expect ')'.");
+            return new ParenthesizedExpression(expr);
+        } else if (match(TokenType.IDENTIFIER)) {
+            return new Identifier(previous());
+        } else {
+            throw error(peek(), "Expect expression.");
+        }
+    }
+
+    private Token consume(TokenType type, String message) {
         if (check(type)) {
-            advance();
-            return;
+            return advance();
         }
         throw error(peek(), message);
     }

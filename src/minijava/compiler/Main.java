@@ -1,5 +1,7 @@
 package minijava.compiler;
 
+import minijava.compiler.ast.*;
+import minijava.compiler.semantic.SemanticAnalyzer;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -42,6 +44,7 @@ public class Main {
     }
 
     private static void run(String source) {
+        // Fase 1: Análise Léxica (Scanner)
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
 
@@ -50,20 +53,38 @@ public class Main {
         //     System.out.println(token);
         // }
 
+        // Fase 2: Análise Sintática (Parser) - Constrói AST
         Parser parser = new Parser(tokens);
-        parser.parse();
+        Program ast = parser.parseProgram();
 
         boolean lexicalError = scanner.hadError();
         boolean syntaxError = parser.hadError();
 
-        if (!lexicalError && !syntaxError) {
-            System.out.println("Parsing completed.");
+        // Fase 3: Análise Semântica
+        boolean semanticError = false;
+        if (!lexicalError && !syntaxError && ast != null) {
+            SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(ast);
+            semanticAnalyzer.analyze();
+            semanticError = semanticAnalyzer.hadError();
+        }
+
+        // Relatório final
+        if (!lexicalError && !syntaxError && !semanticError) {
+            System.out.println("Compilation completed successfully!");
+        } else if (lexicalError && syntaxError && semanticError) {
+            System.out.println("Compilation failed: lexical, syntax, and semantic errors detected.");
         } else if (lexicalError && syntaxError) {
-            System.out.println("Parsing failed: lexical and syntax errors detected.");
+            System.out.println("Compilation failed: lexical and syntax errors detected.");
+        } else if (lexicalError && semanticError) {
+            System.out.println("Compilation failed: lexical and semantic errors detected.");
+        } else if (syntaxError && semanticError) {
+            System.out.println("Compilation failed: syntax and semantic errors detected.");
         } else if (lexicalError) {
-            System.out.println("Parsing failed: lexical errors detected.");
-        } else {
-            System.out.println("Parsing failed: syntax errors detected.");
+            System.out.println("Compilation failed: lexical errors detected.");
+        } else if (syntaxError) {
+            System.out.println("Compilation failed: syntax errors detected.");
+        } else if (semanticError) {
+            System.out.println("Compilation failed: semantic errors detected.");
         }
     }
 }
