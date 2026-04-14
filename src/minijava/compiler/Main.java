@@ -48,17 +48,20 @@ public class Main {
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
 
-        // For debugging scanner:
-        // for (Token token : tokens) {
-        //     System.out.println(token);
-        // }
-
         // Fase 2: Análise Sintática (Parser) - Constrói AST
         Parser parser = new Parser(tokens);
         Program ast = parser.parseProgram();
 
         boolean lexicalError = scanner.hadError();
         boolean syntaxError = parser.hadError();
+
+        // Impressão da árvore, caso não haja erros identificados pelo compilador
+        if (!lexicalError && !syntaxError && ast != null) {
+            System.out.println("\n=== ABSTRACT SYNTAX TREE ===\n");
+            ASTVisualizer visualizer = new ASTVisualizer();
+            System.out.println(visualizer.visualize(ast));
+            System.out.println("=== END OF AST ===\n");
+        }
 
         // Fase 3: Análise Semântica
         boolean semanticError = false;

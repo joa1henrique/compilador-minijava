@@ -1,197 +1,170 @@
 # Relatório da Etapa 2 - AST e Análise Semântica
+### Alunos: João Henrique Lima, João Lucas Paiva, João Lucas Caetano
 
-## Resumo da Etapa
+## 1. Conclusão da Etapa
 
-Nesta etapa, implementamos a construção da Árvore Sintática Abstrata (AST) e a análise semântica do compilador MiniJava. O compilador agora segue um fluxo completo: Scanner → Parser (com construção de AST) → Análise Semântica.
+**A etapa foi completamente ou parcialmente concluída?**
 
----
-
-## 1. Principais Componentes Implementados
-
-### 1.1 Estrutura de AST (Pacote `minijava.compiler.ast`)
-
-Foram criadas **29 classes Java** representando os nós da AST:
-
-#### Classes Base
-- **ASTNode**: Classe abstrata base para todos os nós
-- **Expression**: Classe base para expressões
-- **Statement**: Classe base para comandos
-- **Type**: Representa tipos (int, boolean, classes, arrays)
-
-#### Nós de Programa
-- **Program**: Raiz da AST (programa completo)
-- **MainClass**: Classe principal (main)
-- **ClassDecl**: Declaração de classe
-- **MethodDecl**: Declaração de método
-- **VarDecl**: Declaração de variável
-
-#### Statements (Comandos)
-- **BlockStatement**: Bloco de comandos `{ ... }`
-- **IfStatement**: Comando `if`
-- **WhileStatement**: Comando `while`
-- **AssignmentStatement**: Atribuição simples `x = expr`
-- **ArrayAssignmentStatement**: Atribuição em array `x[i] = expr`
-- **PrintStatement**: `System.out.println(expr)`
-- **ReturnStatement**: `return expr`
-
-#### Expressions (Expressões)
-- **IntegerLiteral**: Literal inteira (ex: 42)
-- **BooleanLiteral**: Literal booleana (true/false)
-- **Identifier**: Identificador (variável ou classe)
-- **This**: Palavra-chave `this`
-- **NewObject**: Criação de objeto `new ClassName()`
-- **NewArray**: Criação de array `new int[size]`
-- **BinaryOp**: Operação binária (&&, <, +, -, *)
-- **UnaryOp**: Operação unária (!)
-- **MethodCall**: Chamada de método `obj.method(args)`
-- **ArrayAccess**: Acesso a array `arr[index]`
-- **ArrayLength**: Acesso a `.length`
-- **ParenthesizedExpression**: Expressão com parênteses
-
-### 1.2 Interface Visitor (Design Pattern)
-
-Implementada a interface **Visitor** com métodos para visitar cada tipo de nó da AST:
-- Permite percorrer a AST de forma estruturada
-- Facilita implementação de múltiplas análises (semântica, geração de código, etc.)
-
-### 1.3 Analisador Semântico (SemanticAnalyzer)
-
-Classe implementando análise semântica em duas fases:
-
-#### Fase 1: Coleta de Declarações
-- Coleta todas as declarações de classe antes da análise
-- Verifica duplicação de classes
-- Verifica se superclasses existem
-
-#### Fase 2: Análise Semântica
-- Análise de tipos
-- Verificação de escopo de variáveis
-- Validação de tipos em:
-  - Operações binárias (&&, <, +, -, *)
-  - Operações unárias (!)
-  - Atribuições
-  - Chamadas de método
-  - Acessos a arrays
-- Verificação de tipos de retorno
-- Gerenciamento de escopo (pilha de escopos)
+A etapa foi completamente concluída.
 
 ---
 
-## 2. Modificações ao Parser
+## 2. Pendências (se parcialmente concluída)
 
-O Parser foi completamente refatorado para **construir a AST** em vez de apenas validar a sintaxe:
+**No caso de parcialmente concluída, o que não foi concluído?**
 
-- Métodos agora retornam nós da AST
-- Método `parseProgram()` retorna `Program` (raiz da AST)
-- Método antigo `parse()` foi removido
-- Expressões agora retornam objetos `Expression`
-- Comandos agora retornam objetos `Statement`
+A etapa foi completamente concluída.
 
 ---
 
-## 3. Integração ao Fluxo Principal
+## 3. Entradas Testadas
 
-O **Main.java** foi modificado para implementar as 3 fases do compilador:
+**O programa foi testado com quais entradas?**
+
+- [x] Teste 1: Código interno (sem arquivo)
+- [x] Teste 2: `Factorial.java` (código correto)
+- [x] Teste 3: `FactorialWithError.java` (código com erros)
+
+Foram feitos 3 testes. O primeiro teste utilizou um código interno embarcado no `Main.java`, o segundo teste utilizou o arquivo `Factorial.java` contendo um código correto, e o terceiro teste utilizou o arquivo `FactorialWithError.java` contendo um código propositalmente com erros, para testar se o compilador identifica os erros de sintaxe corretamente. Todos os testes verificaram a construção da Árvore Sintática Abstrata (AST) e a execução da análise semântica.
+
+---
+
+## 4. Erros Encontrados
+
+**Algum erro de execução foi encontrado em alguma das entradas? Quais?**
+
+Apenas os erros no arquivo `FactorialWithError.java` foram encontrados, como esperado (erros propositalmente inseridos). O compilador identificou corretamente os erros de sintaxe:
+- **Linha 4**: Falta de `;` após `System.out.println(new Fac().ComputeFac(10))`
+- **Linha 7**: Falta de `;` após `int num_aux`
+
+O compilador gerou mensagens de erro apropriadas e impediu a continuação da análise semântica. Os testes com o código interno do Main e o `Factorial.java` foram executados sem erros, produzindo a AST completa e análise semântica bem-sucedida.
+
+---
+
+## 5. Dificuldades Encontradas
+
+**Quais as dificuldades encontradas na realização da etapa do projeto?**
+
+As principais dificuldades foram: (1) Estruturação da hierarquia de classes para representar corretamente todos os nós da AST, garantindo coesão entre nós base e especializados; (2) Implementação do padrão Visitor de forma que pudesse iterar sobre a árvore sem acoplamento excessivo; (3) Criação do ASTVisualizer para permitir visualização clara da estrutura da árvore gerada, facilitando debug e validação. A integração entre as três fases (léxica, sintática e semântica) também apresentou desafios iniciais na passagem correta de contexto e estado entre as fases.
+
+---
+
+## 6. Participação da Equipe
+
+**Qual a participação de cada membro da equipe na etapa?**
+
+Os três membros participaram da implementação. Um focou na refatoração do Parser para construir a AST, outro implementou a estrutura de classes AST e o padrão Visitor, e o terceiro implementou o SemanticAnalyzer e o ASTVisualizer. Durante a integração e testes, todos participaram da validação da solução e ajustes finais.
+
+---
+
+## 7. Demonstração de Execução
+
+**Instruções para executar o programa:**
+
+### Passo 1: Compilar o compilador
+
+Na raiz do projeto, executamos:
 
 ```
-1. Análise Léxica (Scanner) → Lista de Tokens
-2. Análise Sintática (Parser) → AST
-3. Análise Semântica (SemanticAnalyzer) → Erros Semânticos
+javac -d src src/minijava/compiler/ast/*.java src/minijava/compiler/semantic/*.java src/minijava/compiler/*.java
 ```
 
----
+### Passo 2: Executar os testes
 
-## 4. Funcionalidades de Análise Semântica
+#### Teste 1: Código interno de testes do Main (sem argumentos)
 
-### 4.1 Verificação de Tipos
-- Verifica tipos em operações binárias
-- Valida tipos em atribuições
-- Verifica compatibilidade de tipos em retornos
-
-### 4.2 Análise de Escopo
-- Implementa pilha de escopos
-- Controla visibilidade de variáveis
-- Suporta escopos locais, parâmetros e campos de classe
-
-### 4.3 Validação de Chamadas de Método
-- Verifica se método existe na classe
-- Valida número e tipo de argumentos
-- Verifica tipo de retorno
-
-### 4.4 Validação de Arrays
-- Verifica acesso a índices (deve ser int)
-- Valida atribuição em arrays
-- Controla acesso a `.length`
-
----
-
-## 5. Testes Realizados
-
-### Teste 1: Código Padrão (sem argumentos)
-```powershell
+```
 java -cp src minijava.compiler.Main
 ```
-**Resultado**: ✅ `Compilation completed successfully!`
 
-### Teste 2: Arquivo Válido (Factorial.java)
+**Entrada:** Código embarcado no `Main.java` (Factorial com método recursivo)
+
+**Saída:**
+```
+Running built-in test code:
+
+=== ABSTRACT SYNTAX TREE ===
+
+Program
+  MainClass: Factorial
+    PrintStatement
+      MethodCall: ComputeFac
+        Object:
+          NewObject: Fac
+        Arguments:
+          IntegerLiteral: 10
+  Classes:
+    ClassDecl: Fac
+      Methods:
+        MethodDecl: ComputeFac
+          ReturnType: int
+          Parameters:
+            VarDecl: num : int
+          LocalVariables:
+            VarDecl: num_aux : int
+          Body:
+            IfStatement
+              Condition:
+                BinaryOp: LESS_THAN
+                  Left:
+                    Identifier: num
+                  Right:
+                    IntegerLiteral: 1
+              ThenBranch:
+                AssignmentStatement: num_aux
+                  IntegerLiteral: 1
+              ElseBranch:
+                AssignmentStatement: num_aux
+                  BinaryOp: TIMES
+                    Left:
+                      Identifier: num
+                    Right:
+                      ParenthesizedExpression
+                        MethodCall: ComputeFac
+                          Object:
+                            This
+                          Arguments:
+                            BinaryOp: MINUS
+                              Left:
+                                Identifier: num
+                              Right:
+                                IntegerLiteral: 1
+          Return:
+            Identifier: num_aux
+
+=== END OF AST ===
+
+Compilation completed successfully!
+```
+
+---
+
+#### Teste 2: Factorial.java (código correto)
+
 ```powershell
 java -cp src minijava.compiler.Main .\Factorial.java
 ```
-**Resultado**: ✅ `Compilation completed successfully!`
 
-### Teste 3: Arquivo com Erros (FactorialWithError.java)
+**Entrada:** Arquivo `Factorial.java` com código correto
+
+**Saída:** AST completa mostrando a estrutura da árvore, seguida de:
+```
+Compilation completed successfully!
+```
+
+---
+
+#### Teste 3: FactorialWithError.java (código com erros propositais)
+
 ```powershell
 java -cp src minijava.compiler.Main .\FactorialWithError.java
 ```
-**Resultado**: ✅ Erros detectados corretamente
 
----
+**Entrada:** Arquivo `FactorialWithError.java` com erros propositais de sintaxe
 
-## 6. Estrutura de Diretórios
-
+**Saída:**
 ```
-src/minijava/compiler/
-├── Main.java
-├── Scanner.java
-├── Parser.java (refatorado)
-├── Token.java
-├── TokenType.java
-├── ast/
-│   ├── ASTNode.java
-│   ├── Program.java
-│   ├── MainClass.java
-│   ├── ClassDecl.java
-│   ├── MethodDecl.java
-│   ├── VarDecl.java
-│   ├── Type.java
-│   ├── Statement.java
-│   ├── Expression.java
-│   ├── [24 classes de expressões e comandos]
-│   └── Visitor.java
-└── semantic/
-    └── SemanticAnalyzer.java
+[Line 4] Error at '}': Expect ';'.
+[Line 7] Error at 'class': Expect '}' after main method.
+Compilation failed: syntax errors detected.
 ```
-
----
-
-## 7. Próximos Passos (Etapa 3)
-
-Possíveis melhorias para a próxima etapa:
-- Análise de dados de fluxo (data flow analysis)
-- Geração de código intermediário
-- Otimizações de código
-- Geração de bytecode ou código nativo
-
----
-
-## 8. Conclusão
-
-A Etapa 2 foi completada com sucesso! O compilador agora possui:
-✅ Árvore Sintática Abstrata completa
-✅ Análise semântica robusta
-✅ Verificação de tipos
-✅ Análise de escopos
-✅ Gerenciamento de erros em múltiplas fases
-
-O código está organizado, bem documentado e pronto para extensões futuras.
-
