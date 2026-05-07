@@ -2,6 +2,10 @@ package minijava.compiler;
 
 import minijava.compiler.ast.*;
 import minijava.compiler.semantic.SemanticAnalyzer;
+import minijava.compiler.translate.TranslateVisitor; // Novo
+import minijava.compiler.translate.Frag;             // Novo
+import minijava.compiler.translate.ProcFrag;         // Novo
+import minijava.compiler.frame.MipsFrame;           // Novo
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -15,7 +19,6 @@ public class Main {
         } else if (args.length == 1) {
             runFile(args[0]);
         } else {
-            // Run a default test if no args
             String testCode = 
                 "class Factorial {\n" +
                 "    public static void main(String[] a) {\n" +
@@ -44,18 +47,17 @@ public class Main {
     }
 
     private static void run(String source) {
-        // Fase 1: Análise Léxica (Scanner)
+        // --- FASE 1: Análise Léxica (Scanner) ---
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
 
-        // Fase 2: Análise Sintática (Parser) - Constrói AST
+        // --- FASE 2: Análise Sintática (Parser) ---
         Parser parser = new Parser(tokens);
         Program ast = parser.parseProgram();
 
         boolean lexicalError = scanner.hadError();
         boolean syntaxError = parser.hadError();
 
-        // Impressão da árvore, caso não haja erros identificados pelo compilador
         if (!lexicalError && !syntaxError && ast != null) {
             System.out.println("\n=== ABSTRACT SYNTAX TREE ===\n");
             ASTVisualizer visualizer = new ASTVisualizer();
@@ -63,7 +65,7 @@ public class Main {
             System.out.println("=== END OF AST ===\n");
         }
 
-        // Fase 3: Análise Semântica
+        // --- FASE 3: Análise Semântica ---
         boolean semanticError = false;
         if (!lexicalError && !syntaxError && ast != null) {
             SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(ast);
@@ -71,24 +73,41 @@ public class Main {
             semanticError = semanticAnalyzer.hadError();
         }
 
+        // --- FASE 4: Geração de Código Intermediário (Tradução) ---
+        if (!lexicalError && !syntaxError && !semanticError && ast != null) {
+            System.out.println("=== TRANSLATION PHASE ===\n");
+            
+            // 1. Instancia a arquitetura alvo (MIPS)
+            MipsFrame frameFactory = new MipsFrame();
+            
+            // 2. Instancia o Visitor de tradução
+            TranslateVisitor translator = new TranslateVisitor(frameFactory);
+            
+            // 3. Traduz a AST para IRTree
+            ast.accept(translator);
+            
+            // 4. Recupera e exibe os fragmentos gerados
+            Frag frags = translator.getResult();
+            Frag current = frags;
+            int count = 0;
+            
+            while (current != null) {
+                if (current instanceof ProcFrag) {
+                    ProcFrag pf = (ProcFrag) current;
+                    System.out.println("Fragmento #" + count + " (Procedimento): " + pf.frame.name);
+                }
+                current = current.next;
+                count++;
+            }
+            System.out.println("\nTotal de fragmentos gerados: " + count);
+            System.out.println("=== END OF TRANSLATION ===\n");
+        }
+
         // Relatório final
         if (!lexicalError && !syntaxError && !semanticError) {
-            System.out.println("Compilation completed successfully!");
-        } else if (lexicalError && syntaxError && semanticError) {
-            System.out.println("Compilation failed: lexical, syntax, and semantic errors detected.");
-        } else if (lexicalError && syntaxError) {
-            System.out.println("Compilation failed: lexical and syntax errors detected.");
-        } else if (lexicalError && semanticError) {
-            System.out.println("Compilation failed: lexical and semantic errors detected.");
-        } else if (syntaxError && semanticError) {
-            System.out.println("Compilation failed: syntax and semantic errors detected.");
-        } else if (lexicalError) {
-            System.out.println("Compilation failed: lexical errors detected.");
-        } else if (syntaxError) {
-            System.out.println("Compilation failed: syntax errors detected.");
-        } else if (semanticError) {
-            System.out.println("Compilation failed: semantic errors detected.");
+            System.out.println("Compilation and Translation completed successfully!");
+        } else {
+            System.out.println("Compilation failed due to errors detected in previous phases.");
         }
     }
 }
-
